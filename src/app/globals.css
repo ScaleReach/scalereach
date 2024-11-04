@@ -1,0 +1,88 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+	--background: #1a1a1a;
+	--foreground: #292929;
+	--color: #fff;
+
+	--green: #09bc25;
+	--red: #f54747;
+}
+
+body {
+	color: var(--color);
+	background: var(--background);
+}
+
+@keyframes grow-inf {
+	from {
+		transform: scale(.1);
+	} to {
+		transform: scale(1);
+	}
+}
+
+@keyframes jump-in {
+	from {
+		transform: translateY(150%);
+	} to {
+		transform: translateY(0);
+	}
+}
+
+@keyframes jump-fade-in {
+	from {
+		transform: translateY(150%);
+		opacity: 0;
+	} to {
+		transform: translateY(0);
+		opacity: 1;
+	}
+}
+
+@keyframes keypad-up {
+	from {
+		max-height: 0;
+	} to {
+		max-height: 100%;
+	}
+}
+
+@keyframes keypress {
+	0% {
+		background-color: var(--foreground);
+	}
+
+	100% {
+		background-color: #090909;
+	}
+}
+
+@layer base {
+	a {
+		@apply cursor-pointer
+	}
+
+	a:hover {
+		@apply underline
+	}
+
+	p {
+		@apply font-sans
+	}
+}
+
+@layer components {
+}
+
+@layer utilities {
+	.text-balance {
+		text-wrap: balance;
+	}
+
+	.shadow-brand {
+		box-shadow: 0 0 4px 0 rgba(0, 0, 0, .25);
+	}
+}
