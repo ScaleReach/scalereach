@@ -5,6 +5,9 @@ import { PhoneSlash } from "@phosphor-icons/react"
 import { createContext, Dispatch, SetStateAction, useContext, useEffect, useState } from "react"
 import { preload } from "react-dom"
 
+import { Jane } from "@/app/lib/jane"
+import { Synthesiser } from "@/app/lib/synthesis"
+
 enum PhoneState {
 	NOTREADY,
 	READY,
@@ -46,8 +49,8 @@ function CallBubble() {
 		if (state === PhoneState.ENDED) {
 			timeIntervalId = setTimeout(() => setShowBubble(false), 1000)
 		}
-		if (state === PhoneState.READY) {
-			timeIntervalId = setTimeout(() => setShowBubble(true), 500)
+		if (state === PhoneState.READY || state === PhoneState.CONNECTED) {
+			timeIntervalId = setTimeout(() => setShowBubble(true), 1000)
 		}
 
 		return () => {
@@ -163,6 +166,9 @@ function CallToolbar() {
 							return
 						}
 
+						if (state === PhoneState.ENDED) {
+							setState(PhoneState.READY) // transitional phase must occur first
+						}
 						setState(PhoneState.CONNECTED)
 						setShowDialPad(true)
 					}}>
@@ -257,7 +263,7 @@ export default function Main() {
 	const [showDialPad, setShowDialPad] = useState(false)
 
 	useEffect(() => {
-		let timeIntervalId = setTimeout(() => setIsLoading(false), 1000)
+		let timeIntervalId = setTimeout(() => setIsLoading(false), 50)
 
 		return () => clearTimeout(timeIntervalId)
 	}, [])
@@ -268,6 +274,19 @@ export default function Main() {
 		if (state === PhoneState.CONNECTED) {
 			let startTime = +new Date()
 			phoneDurationIntervalId = setInterval(() => setPhoneCallDuration(Math.floor((+new Date() -startTime) /1000)), 1000)
+
+			console.log("running?")
+
+			const j = new Jane()
+			j.register()
+
+			j.onMessage = (message) => {
+				let synth = new Synthesiser(message)
+				synth.play()
+
+				console.log("Jane:", message)
+			}
+			j.start()
 		}
 		if (state === PhoneState.ENDED) {
 			phoneStateResetIntervalId = setTimeout(() => {
