@@ -4,6 +4,10 @@ let development = {
 	JANE: {
 		URL: "http://localhost:3000",
 		HEADER: "x-jane-key"
+	},
+
+	ASR: {
+		URL: "ws://localhost:3002"
 	}
 }
 
@@ -13,6 +17,10 @@ let production = {
 	JANE: {
 		URL: "http://localhost:3000",
 		HEADER: "x-jane-key"
+	},
+
+	ASR: {
+		URL: "wss://localhost:3002"
 	}
 }
 

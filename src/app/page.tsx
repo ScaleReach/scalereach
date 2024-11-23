@@ -7,6 +7,9 @@ import { preload } from "react-dom"
 
 import { Jane } from "@/app/lib/jane"
 import { Synthesiser } from "@/app/lib/synthesis"
+import { Recorder } from "@/app/lib/recognition"
+
+import config from "@/app/config"
 
 enum PhoneState {
 	NOTREADY,
@@ -287,6 +290,28 @@ export default function Main() {
 				console.log("Jane:", message)
 			}
 			j.start()
+
+			// recorder
+			const [isRecording, setIsRecording] = useState(false)
+			const [isConnected, setIsConnected] = useState(false)
+			const socketURL = config.ASR.URL
+			let recorderStates = {
+				isRecording, setIsRecording,
+				isConnected, setIsConnected,
+				socketURL
+			}
+			let recorder = new Recorder(recorderStates)
+
+			let newSession = async () => {
+				let recordingSession = await recorder.createSession()
+				recordingSession.onResult = (content) => {
+					console.log("results", content)
+				}
+				recordingSession.onEnd = (finalContent, duration) => {
+					console.log("final results", finalContent, "took", duration)
+				}
+				recorder.startRecording()
+			}
 		}
 		if (state === PhoneState.ENDED) {
 			phoneStateResetIntervalId = setTimeout(() => {
