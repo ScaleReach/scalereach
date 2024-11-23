@@ -103,9 +103,7 @@ export class Synthesiser {
 
 				const reader = readableStream.getReader()
 				const pushToBuffer = async () => {
-					console.log("Pushing")
 					const { done, value } = await reader.read()
-					console.log("reading", value)
 					if (done) {
 						mediaSource.endOfStream()
 						return

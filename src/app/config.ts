@@ -7,7 +7,7 @@ let development = {
 	},
 
 	ASR: {
-		URL: "ws://localhost:3002"
+		URL: "ws://localhost:3002/recognition"
 	}
 }
 
@@ -20,7 +20,7 @@ let production = {
 	},
 
 	ASR: {
-		URL: "wss://localhost:3002"
+		URL: "wss://localhost:3002/recognition"
 	}
 }
 

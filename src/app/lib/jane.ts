@@ -33,7 +33,7 @@ export class Jane {
 		 * 
 		 * returns null if failed
 		 */
-		let authResponse = await axios<any, { key: string }>({
+		let authResponse = await axios<{ key: string }>({
 			method: "get",
 			url: `${config.JANE.URL}/chat/new`
 		})
@@ -50,7 +50,7 @@ export class Jane {
 
 		this.bridge = axios.create({
 			baseURL: config.JANE.URL,
-			timeout: 1000,
+			timeout: 60000, // 1min timeout
 			headers: { [config.JANE.HEADER]: authKey }
 		})
 		this.ready = true
@@ -63,7 +63,7 @@ export class Jane {
 		this.addDialogue(Speaker.System, "Hello, I am Jane from OCBC, how may I help you?")
 	}
 
-	private addDialogue(speaker, content) {
+	private addDialogue(speaker: Speaker, content: string) {
 		this.msgHistory.push([speaker, content])
 		if (this.onMessage) {
 			this.onMessage(content)
@@ -79,7 +79,11 @@ export class Jane {
 			return
 		}
 
-		let response = await this.bridge.post("/chat", prompt)
+		let response = await this.bridge.post("/chat", prompt, {
+			headers: {
+				"Content-Type": "text/plain"
+			}
+		})
 		if (response.status !== 200) {
 			console.log("response.status", response.status)
 			return
@@ -88,7 +92,7 @@ export class Jane {
 		console.log("response", response.data)
 		this.msgHistory.push([Speaker.User, prompt])
 		if (response.data.message) {
-			addDialogue(Speaker.System, response.data.message)
+			this.addDialogue(Speaker.System, response.data.message)
 		}
 	}
 }

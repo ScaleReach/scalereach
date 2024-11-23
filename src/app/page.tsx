@@ -2,7 +2,7 @@
 
 import logo from "@/public/logo.svg"
 import { PhoneSlash } from "@phosphor-icons/react"
-import { createContext, Dispatch, SetStateAction, useContext, useEffect, useState } from "react"
+import { createContext, Dispatch, SetStateAction, useContext, useEffect, useRef, useState } from "react"
 import { preload } from "react-dom"
 
 import { Jane } from "@/app/lib/jane"
@@ -26,7 +26,8 @@ type PhoneContext = {
 	phoneCallDuration?: number,
 	setPhoneCallDuration?: Dispatch<SetStateAction<number>>,
 	showDialPad?: boolean,
-	setShowDialPad?: Dispatch<SetStateAction<boolean>>
+	setShowDialPad?: Dispatch<SetStateAction<boolean>>,
+	transcriptionText?: string
 }
 
 const PhoneContext = createContext<PhoneContext>({})
@@ -155,6 +156,7 @@ function CallToolbar() {
 							return
 						}
 
+						console.log("state set", PhoneState.ENDED)
 						setState(PhoneState.ENDED)
 						setShowDialPad(false)
 					}}>
@@ -239,6 +241,16 @@ function DialPad() {
 	)
 }
 
+function CallTranscription() {
+	const { transcriptionText } = useContext(PhoneContext)
+
+	return (
+		<div className="flex jsutify-center items-center pb-8">
+			<p>{transcriptionText}</p>
+		</div>
+	)
+}
+
 function DialWindow() {
 	const { state, setState, isLoading, showDialPad } = useContext(PhoneContext)
 
@@ -250,6 +262,7 @@ function DialWindow() {
 		}}>
 			<div className="grow w-full flex flex-col items-center justify-center p-4">
 				<CallBubble />
+				<CallTranscription />
 				<CallToolbar />
 			</div>
 			{
@@ -264,6 +277,57 @@ export default function Main() {
 	const [state, setState] = useState(PhoneState.READY)
 	const [phoneCallDuration, setPhoneCallDuration] = useState(0)
 	const [showDialPad, setShowDialPad] = useState(false)
+
+	const [transcriptionText, setTranscriptionText] = useState("")
+	const transcriptionWriterOwnerRef = useRef(0)
+	const transcriptionWriterContentRef = useRef<string[]>([]) // store tokens of transcribed text to be displayed (typewriter effect)
+
+	// recorder states
+	const currentRecorderRef = useRef<Recorder|undefined>()
+	const [isRecording, setIsRecording] = useState(false)
+	const [isConnected, setIsConnected] = useState(false)
+
+	// recorder
+	const socketURL = config.ASR.URL
+	const newSession = async (j: Jane) => {
+		if (currentRecorderRef.current) {
+			// clean up previous recorder
+			currentRecorderRef.current.stopRecording()
+			currentRecorderRef.current.cleanup()
+			currentRecorderRef.current = undefined // unset
+		}
+
+		// create new recorder
+		let recorderStates = {
+			isRecording, setIsRecording,
+			isConnected, setIsConnected,
+			socketURL
+		}
+		let recorder = new Recorder(recorderStates)
+		currentRecorderRef.current = recorder // store reference
+
+		let recordingSession = await recorder.createSession()
+		recordingSession.onResult = (content) => {
+			setTranscriptionText(content) // set content
+			console.log("results", content)
+		}
+		recordingSession.onEnd = (finalContent, duration) => {
+			// recorder should already be stopped
+			setTranscriptionText(finalContent) // set final content
+			console.log("final results", finalContent, "took", duration)
+
+			// pass message to jane
+			j.chat(finalContent)
+
+			// cleanup (remove reference entirely to current recorder object)
+			recorder.cleanup() // no need to invoke .stopRecording() method since session.onEnd will do so internally
+			currentRecorderRef.current = undefined
+		}
+
+		// start recording
+		currentRecorderRef.current.startRecording()
+		console.log("started recording")
+	}
 
 	useEffect(() => {
 		let timeIntervalId = setTimeout(() => setIsLoading(false), 50)
@@ -284,36 +348,53 @@ export default function Main() {
 			j.register()
 
 			j.onMessage = (message) => {
+				let writerId = +new Date()
+				transcriptionWriterOwnerRef.current = writerId
+
+				// set content to be spoken
+				let tokens = message.split(" ")
+				let tokenIdx = 0
+				let timeIntervalId: NodeJS.Timeout
+
+				transcriptionWriterContentRef.current = [] // new empty array (clear previous typed contents)
+				setTranscriptionText("")
+				timeIntervalId = setInterval(() => {
+					if (writerId !== transcriptionWriterOwnerRef.current || tokenIdx >= tokens.length) {
+						// no longer the same writer OR typed finish
+						return clearInterval(timeIntervalId)
+					}
+
+					transcriptionWriterContentRef.current.push(tokens[tokenIdx++])
+					setTranscriptionText(transcriptionWriterContentRef.current.join(" "))
+				}, 150)
+
+				// playback speech
 				let synth = new Synthesiser(message)
 				synth.play()
+
+				// start recorder
+				newSession(j) // new session
 
 				console.log("Jane:", message)
 			}
 			j.start()
 
-			// recorder
-			const [isRecording, setIsRecording] = useState(false)
-			const [isConnected, setIsConnected] = useState(false)
-			const socketURL = config.ASR.URL
-			let recorderStates = {
-				isRecording, setIsRecording,
-				isConnected, setIsConnected,
-				socketURL
-			}
-			let recorder = new Recorder(recorderStates)
-
-			let newSession = async () => {
-				let recordingSession = await recorder.createSession()
-				recordingSession.onResult = (content) => {
-					console.log("results", content)
-				}
-				recordingSession.onEnd = (finalContent, duration) => {
-					console.log("final results", finalContent, "took", duration)
-				}
-				recorder.startRecording()
-			}
+			// set up recorder
+			newSession(j) // start asap
 		}
 		if (state === PhoneState.ENDED) {
+			// cleanup recorder instance if present
+			console.log("cleaning up?", currentRecorderRef.current)
+			if (currentRecorderRef.current) {
+				currentRecorderRef.current.stopRecording()
+				currentRecorderRef.current.cleanup()
+				currentRecorderRef.current = undefined // unset reference
+			}
+
+			// clean up transcription state
+			setTranscriptionText("") // set empty
+
+			// set state to be ready again
 			phoneStateResetIntervalId = setTimeout(() => {
 				console.log("resetin")
 				setPhoneCallDuration(0) // reset
@@ -332,7 +413,7 @@ export default function Main() {
 	}, [state])
 
 	return (
-		<PhoneContext.Provider value={{state, setState, isLoading, setIsLoading, phoneCallDuration, setPhoneCallDuration, showDialPad, setShowDialPad}}>
+		<PhoneContext.Provider value={{state, setState, isLoading, setIsLoading, phoneCallDuration, setPhoneCallDuration, showDialPad, setShowDialPad, transcriptionText}}>
 			<div className="grow flex flex-col items-center">
 				<img className={`transition-all ${isLoading ? `grow p-24` : `box-content p-4 basis-6 shrink-0 grow-0 min-h-0 w-1/3`}`} src={logo.src} />
 				{

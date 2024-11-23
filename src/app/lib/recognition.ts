@@ -2,7 +2,6 @@
 
 import React, { Dispatch, SetStateAction, useEffect, useState } from 'react'
 import { io, Socket } from "socket.io-client"
-import { GamePreferences } from './definitions'
 
 interface RecordingSession {
 	_id?: number,
@@ -83,6 +82,9 @@ export class Recorder {
 			source.connect(highpassFilter)
 			source.connect(lowpassFilter)
 
+			let avgAmplitude = [] // to append average amplitude here (moving average filter)
+			const windowSize = 5 // size of moving average window
+
 			this.recorder.ondataavailable = async (event) => {
 				if (!this.isRecording) {
 					// not recording, stop microphone (mediaRecorder is listening for audio but internal state says otherwise)
@@ -99,13 +101,25 @@ export class Recorder {
 					// determine frequency analysis
 					analyser.getByteFrequencyData(dataArray)
 					let sum = 0
-					for (let i = 0 i < bufferLength i++) {
+					for (let i = 0; i < bufferLength; i++) {
 						sum += dataArray[i]
 					}
 
-					const average = sum /bufferLength
-					if (average > 10) {
+					// compute average for this event
+					const currentAverage = sum /bufferLength
+					avgAmplitude.push(currentAverage)
+
+					// maintain window size
+					if (avgAmplitude.length > windowSize) {
+						avgAmplitude.shift()
+					}
+
+					// calculate moving average (past few events under window size)
+					const movingAverage = avgAmplitude.reduce((a, b) => a +b, 0) /avgAmplitude.length
+					console.log("moving average", movingAverage)
+					if (movingAverage > 2) {
 						// speech detected and socket is connected -> send data to speech service
+						// console.log("sending audio")
 					}
 					this.socket.emit("audio", event.data) // send binary data as array buffer
 				}
@@ -117,6 +131,10 @@ export class Recorder {
 
 		// initialise socket
 		this.socket = io(socketURL)
+
+		const onError = (err: any) => {
+			console.warn("Error returned by socket instance", err)
+		}
 
 		const onConnect = () => {
 			this.setIsConnected(true)
@@ -163,17 +181,18 @@ export class Recorder {
 		}
 
 		const onTranscriptionFailure = async () => {
-			this.stopRecording()
-			// let { onResult, onEnd } = this.session
+			console.log("transcription failure, restarting")
+			// this.stopRecording()
+			let { onResult, onEnd } = this.session
 
-			// this.clearSession()
-			// this.createSession()
+			this.clearSession()
+			this.createSession()
 
-			// // attach back event handlers
-			// this.session.onResult = onResult
-			// this.session.onEnd = onEnd
+			// attach back event handlers
+			this.session.onResult = onResult
+			this.session.onEnd = onEnd
 
-			// console.log("reattached")
+			console.log("reattached")
 		}
 
 		// establish socket connection
@@ -182,6 +201,7 @@ export class Recorder {
 		}
 
 		// attach events
+		this.socket.on("error", onError)
 		this.socket.on("connect", onConnect)
 		this.socket.on("disconnect", onDisconnect)
 		this.socket.on("transcription", onTranscription)
@@ -204,10 +224,12 @@ export class Recorder {
 		})
 
 		// let server knows to preload connection to ML
-		if (this.socket.connected) {
-			console.log("preloading..")
-			this.socket.emit("preload")
+		console.log("this.socket.connected", this.socket.connected)
+		if (!this.socket) {
+			throw new Error("Socket not ready")
 		}
+		console.log("preloading..")
+		this.socket.emit("preload")
 
 		return p // return promise chain and wait for preload-ready to come through
 	}
@@ -265,6 +287,7 @@ export class Recorder {
 		// clean up media recorder
 		if (this.recorder) {
 			this.recorder.ondataavailable = null
+			console.log("unhooked")
 			this.recorder.stream.getTracks().forEach(track => track.stop())
 			this.recorder = undefined // remove reference
 		}
