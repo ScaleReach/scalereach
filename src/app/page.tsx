@@ -27,6 +27,8 @@ type PhoneContext = {
 	setPhoneCallDuration?: Dispatch<SetStateAction<number>>,
 	showDialPad?: boolean,
 	setShowDialPad?: Dispatch<SetStateAction<boolean>>,
+	dialPadContent?: string,
+	setDialPadContent?: Dispatch<SetStateAction<string>>,
 	transcriptionText?: string
 }
 
@@ -186,7 +188,7 @@ function CallToolbar() {
 }
 
 function DialPad() {
-	const { showDialPad } = useContext(PhoneContext)
+	const { showDialPad, dialPadContent, setDialPadContent } = useContext(PhoneContext)
 	let keys = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "*", "0", "#"]
 
 	const [touchTones, setTouchTones] = useState<{[key: string]: HTMLAudioElement}>({})
@@ -230,6 +232,11 @@ function DialPad() {
 
 						// haptic feedback
 						navigator.vibrate(1000)
+
+						// add into input
+						if (setDialPadContent) {
+							setDialPadContent(dialPadContent +key)
+						}
 					}} onAnimationEnd={e => {
 						e.currentTarget.style.animationName = ""
 					}}>
@@ -287,6 +294,10 @@ export default function Main() {
 	const [isRecording, setIsRecording] = useState(false)
 	const [isConnected, setIsConnected] = useState(false)
 
+	// dialpad
+	const [dialPadContent, setDialPadContent] = useState("")
+	const dialPadFinishCbRef = useRef<(finalDialPadContent: string) => void>()
+
 	// recorder
 	const socketURL = config.ASR.URL
 	const newSession = async (j: Jane) => {
@@ -329,12 +340,28 @@ export default function Main() {
 		console.log("started recording")
 	}
 
+	const dialPadTargetRegex = /^\d{7}#\d{7}$/
+	useEffect(() => {
+		/**
+		 * listen for target input from dialpad in the format "NRICWithoutAlphabets#BANKNO#" (e.g. "1xxx121#2345678#")
+		 * call respective function upon target interested input received
+		 */
+		if (dialPadContent.length >= 1 && dialPadFinishCbRef.current) {
+			if (dialPadTargetRegex.test(dialPadContent)) {
+				// match
+				dialPadFinishCbRef.current(dialPadContent) // invoke function (will unset reference internally)
+			}
+		}
+	}, [dialPadContent])
+
+	// initial loading screen
 	useEffect(() => {
 		let timeIntervalId = setTimeout(() => setIsLoading(false), 50)
 
 		return () => clearTimeout(timeIntervalId)
 	}, [])
 
+	// main call flow
 	useEffect(() => {
 		let phoneDurationIntervalId: NodeJS.Timeout
 		let phoneStateResetIntervalId: NodeJS.Timeout
@@ -347,7 +374,7 @@ export default function Main() {
 			const j = new Jane()
 			j.register()
 
-			j.onMessage = (message) => {
+			j.onMessage = (message, dialPadInputNext) => {
 				let writerId = +new Date()
 				transcriptionWriterOwnerRef.current = writerId
 
@@ -373,7 +400,25 @@ export default function Main() {
 				synth.play()
 
 				// start recorder
-				newSession(j) // new session
+				if (!dialPadInputNext) {
+					// not expecting dialpad
+					return newSession(j) // new session
+				}
+
+				// listen to pad input
+				setDialPadContent("") // reset input
+				let localSuppliedInputDebounce = true
+				dialPadFinishCbRef.current = (finalDialPadContent: string) => {
+					// only meant to be called once
+					if (!localSuppliedInputDebounce) {
+						// debounce for safe measures --> maybe dialPadFinishCbRef wasn't unset fast enough before next input triggered call again
+						return
+					}
+					dialPadFinishCbRef.current = undefined // unset reference so that it can only be called once
+
+					// TODO: retry if input fails to satisfy /^\d{7}#\d{7}#$/
+					j.supplyInput(finalDialPadContent)
+				}
 
 				console.log("Jane:", message)
 			}
@@ -413,7 +458,7 @@ export default function Main() {
 	}, [state])
 
 	return (
-		<PhoneContext.Provider value={{state, setState, isLoading, setIsLoading, phoneCallDuration, setPhoneCallDuration, showDialPad, setShowDialPad, transcriptionText}}>
+		<PhoneContext.Provider value={{state, setState, isLoading, setIsLoading, phoneCallDuration, setPhoneCallDuration, showDialPad, setShowDialPad, dialPadContent, setDialPadContent, transcriptionText}}>
 			<div className="grow flex flex-col items-center">
 				<img className={`transition-all ${isLoading ? `grow p-24` : `box-content p-4 basis-6 shrink-0 grow-0 min-h-0 w-1/3`}`} src={logo.src} />
 				{

@@ -16,13 +16,16 @@ export class Jane {
 	bridge?: AxiosInstance
 
 	msgHistory: [Speaker, string][]
-	onMessage?: (message: string) => void
+	onMessage?: (message: string, dialPadActionNext: boolean) => void
+	isDialPadInputNext: boolean
+	dialPadActionId?: number
 
 	constructor() {
 		this.ready = false
 		this.started = false
 
 		this.msgHistory = []
+		this.isDialPadInputNext = false // set to true to prevent listening to input
 	}
 
 	async register() {
@@ -66,7 +69,7 @@ export class Jane {
 	private addDialogue(speaker: Speaker, content: string) {
 		this.msgHistory.push([speaker, content])
 		if (this.onMessage) {
-			this.onMessage(content)
+			this.onMessage(content, this.isDialPadInputNext)
 		}
 	}
 
@@ -79,7 +82,7 @@ export class Jane {
 			return
 		}
 
-		let response = await this.bridge.post("/chat", prompt, {
+		let response = await this.bridge.post<{ type: number, spokenResponse: string, inputId?: number }>("/chat", prompt, {
 			headers: {
 				"Content-Type": "text/plain"
 			}
@@ -90,9 +93,43 @@ export class Jane {
 		}
 
 		console.log("response", response.data)
-		this.msgHistory.push([Speaker.User, prompt])
-		if (response.data.message) {
-			this.addDialogue(Speaker.System, response.data.message)
+		if (response.data.type === 5) {
+			// expecting dial pad input, expect 100% correctness in params from server (.inputId shhould be present when type === 5)
+			this.isDialPadInputNext = true
+			this.dialPadActionId = response.data.inputId!
 		}
+
+		this.msgHistory.push([Speaker.User, prompt])
+		this.addDialogue(Speaker.System, response.data.spokenResponse)
+	}
+
+	async supplyInput(input: string) {
+		/**
+		 * supplies dial pad input
+		 */
+		if (!this.isDialPadInputNext) {
+			// not expecting input
+			return
+		}
+		if (!this.bridge) {
+			console.log("bridge not set")
+			return
+		}
+
+		// unset
+		this.isDialPadInputNext = false
+
+		let response = await this.bridge.post(`/supply/${this.dialPadActionId}`, {
+			headers: {
+				"Content-Type": "text/plain"
+			}
+		})
+		if (response.status !== 200) {
+			console.log("input response.status", response.status)
+			return
+		}
+
+		console.log("dialpad input response", response.data)
+		this.addDialogue(Speaker.System, response.data.spokenResponse)
 	}
 }
