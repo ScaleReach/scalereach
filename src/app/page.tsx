@@ -363,12 +363,13 @@ export default function Main() {
 		console.log("started recording")
 	}
 
-	const dialPadTargetRegex = /^\d{7}#\d{7}$/
+	const dialPadTargetRegex = /^\d{7}#\d{7}#$/
 	useEffect(() => {
 		/**
 		 * listen for target input from dialpad in the format "NRICWithoutAlphabets#BANKNO#" (e.g. "1xxx121#2345678#")
 		 * call respective function upon target interested input received
 		 */
+		console.log("matching", dialPadFinishCbRef.current, dialPadContent, dialPadTargetRegex.test(dialPadContent))
 		if (dialPadContent.length >= 1 && dialPadFinishCbRef.current) {
 			if (dialPadTargetRegex.test(dialPadContent)) {
 				// match

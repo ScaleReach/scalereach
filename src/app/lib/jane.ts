@@ -53,7 +53,7 @@ export class Jane {
 
 		this.bridge = axios.create({
 			baseURL: config.JANE.URL,
-			timeout: 60000, // 1min timeout
+			timeout: 600000, // 10min timeout
 			headers: { [config.JANE.HEADER]: authKey }
 		})
 		this.ready = true
@@ -119,7 +119,7 @@ export class Jane {
 		// unset
 		this.isDialPadInputNext = false
 
-		let response = await this.bridge.post(`/supply/${this.dialPadActionId}`, {
+		let response = await this.bridge.post(`/chat/supply/${this.dialPadActionId}`, {
 			headers: {
 				"Content-Type": "text/plain"
 			}
