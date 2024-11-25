@@ -1,7 +1,7 @@
 "use client"
 
 import logo from "@/public/logo.svg"
-import { PhoneSlash } from "@phosphor-icons/react"
+import { Backspace, PhoneSlash } from "@phosphor-icons/react"
 import { createContext, Dispatch, SetStateAction, useContext, useEffect, useRef, useState } from "react"
 import { preload } from "react-dom"
 
@@ -187,6 +187,24 @@ function CallToolbar() {
 	)
 }
 
+function DialPadField() {
+	const { dialPadContent, setDialPadContent } = useContext(PhoneContext)
+	return (
+		<div className="px-4 py-2 flex justify-center items-center border-b border-solid border-[rgb(41_41_41)]">
+			<p className="grow text-center text-2xl">{dialPadContent?.length === 0 ? "\u00A0" : dialPadContent}</p>
+			<button name="delete-button" onClick={() => {
+				if (!dialPadContent || !setDialPadContent) {
+					return
+				}
+
+				setDialPadContent(dialPadContent.slice(0, dialPadContent.length -1))
+			}}>
+				<Backspace size={24} />
+			</button>
+		</div>
+	)
+}
+
 function DialPad() {
 	const { showDialPad, dialPadContent, setDialPadContent } = useContext(PhoneContext)
 	let keys = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "*", "0", "#"]
@@ -210,7 +228,7 @@ function DialPad() {
 	}, [])
 
 	return (
-		<div className="grow w-full grid grid-cols-3" style={{
+		<div className="grow grid grid-cols-3" style={{
 			animationName: "keypad-up",
 			animationDuration: "1s",
 			animationFillMode: "forwards",
@@ -218,7 +236,7 @@ function DialPad() {
 		}}>
 			{
 				keys.map((key, i) =>
-					<button key={i} className="p-3 font-bold text-2xl bg-[#090909] transition-colors" style={{
+					<button key={i} className="p-3 font-bold text-2xl transition-colors" style={{
 						animationDuration: "180ms",
 						animationFillMode: "forwards",
 					}} onClick={e => {
@@ -273,7 +291,12 @@ function DialWindow() {
 				<CallToolbar />
 			</div>
 			{
-				showDialPad && <DialPad />
+				showDialPad && (
+					<div className="w-full flex flex-col bg-[#090909] z-10">
+						<DialPadField />
+						<DialPad />
+					</div>
+				)
 			}
 		</div>
 	)
