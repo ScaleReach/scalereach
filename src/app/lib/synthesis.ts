@@ -42,6 +42,10 @@ async function googleSpeech(audio: HTMLAudioElement, text: string, resolverFn: (
 
 export class Synthesiser {
 	text: string
+	stopped: boolean
+	mediaSource?: MediaSource
+	sourceBuffer?: SourceBuffer
+	audio: HTMLAudioElement
 
 	constructor(text: string) {
 		if (text.length >= 1000) {
@@ -50,6 +54,9 @@ export class Synthesiser {
 		}
 
 		this.text = text
+		this.stopped = false
+
+		this.audio = new Audio()
 	}
 
 	play() {
@@ -57,6 +64,7 @@ export class Synthesiser {
 		 * plays the synthesised output when ready
 		 * returns a promise that will resolve when playback is completed (either failed to start or finished)
 		 */
+		this.stopped = false // reset flag
 
 		// return promise chain
 		let resolverFn: () => void
@@ -65,25 +73,25 @@ export class Synthesiser {
 		})
 
 		// create playback object
-		const audio = new Audio()
-		audio.addEventListener("ended", () => {
+		this.audio.addEventListener("ended", () => {
 			resolverFn()
 		})
 
 		console.log("??", window.MediaSource)
 		if (window.MediaSource) {
 			// stream via media source
-			const mediaSource = new MediaSource()
+			this.mediaSource = new MediaSource()
 
-			audio.src = URL.createObjectURL(mediaSource)
-			audio.play().catch(err => {
+			this.audio.src = URL.createObjectURL(this.mediaSource)
+			this.audio.play().catch(err => {
 				resolverFn() // no audio -> resolve promise to continue game
 			})
 
-			mediaSource.addEventListener("sourceopen", async () => {
+			this.mediaSource.addEventListener("sourceopen", async () => {
 				console.log("SOURCE OPENED")
+				if (this.stopped || !this.mediaSource) return
 
-				const sourceBuffer = mediaSource.addSourceBuffer("audio/aac")
+				this.sourceBuffer = this.mediaSource.addSourceBuffer("audio/aac")
 				const readableStream = await fetch(`/api/synth`, {
 					method: "POST",
 					headers: {
@@ -97,28 +105,28 @@ export class Synthesiser {
 					console.warn("fetching readablestream", err)
 					return
 				})
-				if (readableStream == null) {
+				if (readableStream == null || this.stopped) {
 					return resolverFn()
 				}
 
 				const reader = readableStream.getReader()
 				const pushToBuffer = async () => {
 					const { done, value } = await reader.read()
-					if (done) {
-						mediaSource.endOfStream()
+					if (done && this.mediaSource) {
+						this.mediaSource.endOfStream()
 						return
 					}
 
-					if (!sourceBuffer.updating) {
-						sourceBuffer.appendBuffer(value)
+					if (value && this.sourceBuffer && !this.sourceBuffer.updating) {
+						this.sourceBuffer.appendBuffer(value)
 					}
 				}
 
-				sourceBuffer.addEventListener("updateend", pushToBuffer)
+				this.sourceBuffer.addEventListener("updateend", pushToBuffer)
 				pushToBuffer() // initial update
 			})
 
-			mediaSource.addEventListener("error", e => {
+			this.mediaSource.addEventListener("error", e => {
 				console.log("Mediasource error")
 				resolverFn() // immediately resolve promise
 			})
@@ -147,7 +155,7 @@ export class Synthesiser {
 
 				let chunks = [] // stream and accumulate audio data here
 				let finishedStreaming = false;
-				while (!finishedStreaming) {
+				while (!finishedStreaming || !this.stopped) {
 					const { value, done } = await reader.read();
 					if (value) {
 						chunks.push(value);
@@ -159,8 +167,8 @@ export class Synthesiser {
 				// create blob from array of chunks
 				const blob = new Blob(chunks, { type: "audio/aac" });
 
-				audio.src = URL.createObjectURL(blob)
-				audio.play().catch(err => {
+				this.audio.src = URL.createObjectURL(blob)
+				this.audio.play().catch(err => {
 					resolverFn() // no audio -> resolve promise to continue game
 				})
 			}
@@ -169,5 +177,23 @@ export class Synthesiser {
 		}
 
 		return p
+	}
+
+	stop() {
+		this.stopped = true
+
+		if (this.audio) {
+			this.audio.pause()
+			this.audio.src = "" // drop media source
+		}
+
+		if (this.sourceBuffer) {
+			this.sourceBuffer.removeEventListener("updateend", () => {})
+		}
+
+		if (this.mediaSource) {
+			this.mediaSource.removeEventListener("sourceopen", () => {})
+			this.mediaSource.endOfStream()
+		}
 	}
 }

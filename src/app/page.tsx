@@ -317,6 +317,9 @@ export default function Main() {
 	const [isRecording, setIsRecording] = useState(false)
 	const [isConnected, setIsConnected] = useState(false)
 
+	// synthesiser
+	const currentSynthPlayerRef = useRef<Synthesiser|undefined>()
+
 	// dialpad
 	const [dialPadContent, setDialPadContent] = useState("")
 	const dialPadFinishCbRef = useRef<(finalDialPadContent: string) => void>()
@@ -419,9 +422,16 @@ export default function Main() {
 					setTranscriptionText(transcriptionWriterContentRef.current.join(" "))
 				}, 150)
 
+
+				// stop any playback that is happening
+				if (currentSynthPlayerRef.current) {
+					currentSynthPlayerRef.current.stop()
+				}
+
 				// playback speech
 				let synth = new Synthesiser(message)
 				synth.play()
+				currentSynthPlayerRef.current = synth // set reference (so that it can be stopped in another event)
 
 				// start recorder
 				if (!dialPadInputNext) {
