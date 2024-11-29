@@ -16,7 +16,7 @@ export class Jane {
 	bridge?: AxiosInstance
 
 	msgHistory: [Speaker, string][]
-	onMessage?: (message: string, dialPadActionNext: boolean) => void
+	onMessage?: (message: string, dialPadActionNext: boolean, endCall: boolean) => void
 	isDialPadInputNext: boolean
 	dialPadActionId?: number
 
@@ -63,13 +63,13 @@ export class Jane {
 		this.started = true
 
 		// add greeeter dialogue entry
-		this.addDialogue(Speaker.System, "Hello, I am Jane from OCBC, how may I help you?")
+		this.addDialogue(Speaker.System, "Hello, I am Jane from OCBC, how may I help you?", false)
 	}
 
-	private addDialogue(speaker: Speaker, content: string) {
+	private addDialogue(speaker: Speaker, content: string, lastDialogue: boolean) {
 		this.msgHistory.push([speaker, content])
 		if (this.onMessage) {
-			this.onMessage(content, this.isDialPadInputNext)
+			this.onMessage(content, this.isDialPadInputNext, lastDialogue)
 		}
 	}
 
@@ -100,7 +100,7 @@ export class Jane {
 		}
 
 		this.msgHistory.push([Speaker.User, prompt])
-		this.addDialogue(Speaker.System, response.data.spokenResponse)
+		this.addDialogue(Speaker.System, response.data.spokenResponse, response.data.type === 7 || response.data.type === 8)
 	}
 
 	async supplyInput(input: string) {
@@ -130,6 +130,6 @@ export class Jane {
 		}
 
 		console.log("dialpad input response", response.data)
-		this.addDialogue(Speaker.System, response.data.spokenResponse)
+		this.addDialogue(Speaker.System, response.data.spokenResponse, response.data.type === 7 || response.data.type === 8)
 	}
 }

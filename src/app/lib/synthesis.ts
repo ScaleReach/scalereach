@@ -117,7 +117,7 @@ export class Synthesiser {
 						return
 					}
 
-					if (value && this.sourceBuffer && !this.sourceBuffer.updating) {
+					if (value && !this.stopped && this.sourceBuffer && !this.sourceBuffer.updating) {
 						this.sourceBuffer.appendBuffer(value)
 					}
 				}
@@ -181,8 +181,10 @@ export class Synthesiser {
 
 	stop() {
 		this.stopped = true
+		console.log("SYNTH: .stop() triggered")
 
 		if (this.audio) {
+			console.log("SYNTH", this.audio, "pausing audio")
 			this.audio.pause()
 			this.audio.src = "" // drop media source
 		}
@@ -193,7 +195,6 @@ export class Synthesiser {
 
 		if (this.mediaSource) {
 			this.mediaSource.removeEventListener("sourceopen", () => {})
-			this.mediaSource.endOfStream()
 		}
 	}
 }

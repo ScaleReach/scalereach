@@ -23,6 +23,8 @@ type PhoneContext = {
 	setIsLoading?: Dispatch<SetStateAction<boolean>>,
 	state?: PhoneState,
 	setState?: Dispatch<SetStateAction<PhoneState>>,
+	masterCallState?: boolean,
+	setMasterCallState?: Dispatch<SetStateAction<boolean>>,
 	phoneCallDuration?: number,
 	setPhoneCallDuration?: Dispatch<SetStateAction<number>>,
 	showDialPad?: boolean,
@@ -97,7 +99,7 @@ function CallBubble() {
 }
 
 function CallToolbar() {
-	const { state, setState, isLoading, phoneCallDuration, setShowDialPad } = useContext(PhoneContext)
+	const { state, setState, setMasterCallState, isLoading, phoneCallDuration, setShowDialPad } = useContext(PhoneContext)
 
 	const [ showToolbar, setShowToolbar ] = useState(false)
 	useEffect(() => {
@@ -151,33 +153,16 @@ function CallToolbar() {
 			{
 				state === PhoneState.CONNECTED ? (
 					<button className="px-3 p-1 rounded-md bg-red" onClick={() => {
-						if (!setState) {
-							return
-						}
-						if (!setShowDialPad) {
-							return
-						}
-
-						console.log("state set", PhoneState.ENDED)
-						setState(PhoneState.ENDED)
-						setShowDialPad(false)
+						// HERE
+						if (!setMasterCallState) return
+						setMasterCallState(false) // drop call
 					}}>
 						<PhoneSlash size={32} />
 					</button>
 				) : (
 					<button className="p-2" onClick={() => {
-						if (!setState) {
-							return
-						}
-						if (!setShowDialPad) {
-							return
-						}
-
-						if (state === PhoneState.ENDED) {
-							setState(PhoneState.READY) // transitional phase must occur first
-						}
-						setState(PhoneState.CONNECTED)
-						setShowDialPad(true)
+						if (!setMasterCallState) return
+						setMasterCallState(true) // pick up call
 					}}>
 						<p>Call</p>
 					</button>
@@ -312,6 +297,9 @@ export default function Main() {
 	const transcriptionWriterOwnerRef = useRef(0)
 	const transcriptionWriterContentRef = useRef<string[]>([]) // store tokens of transcribed text to be displayed (typewriter effect)
 
+	// phone state wrapper
+	const [masterCallState, setMasterCallState] = useState<boolean>(false) // true if in-call, false if call dropped
+
 	// recorder states
 	const currentRecorderRef = useRef<Recorder|undefined>()
 	const [isRecording, setIsRecording] = useState(false)
@@ -362,6 +350,8 @@ export default function Main() {
 		}
 
 		// start recording
+		await currentRecorderRef.current.micReadyPromise // wait for mic to be ready
+		console.log("mic ready")
 		currentRecorderRef.current.startRecording()
 		console.log("started recording")
 	}
@@ -388,6 +378,20 @@ export default function Main() {
 		return () => clearTimeout(timeIntervalId)
 	}, [])
 
+	// master phone call state
+	useEffect(() => {
+		if (masterCallState) {
+			if (state === PhoneState.ENDED) {
+				setState(PhoneState.READY) // transitional phase must occur first
+			}
+			setState(PhoneState.CONNECTED)
+			setShowDialPad(true)
+		} else {
+			setState(PhoneState.ENDED) // will end audio playing
+			setShowDialPad(false)
+		}
+	}, [masterCallState])
+
 	// main call flow
 	useEffect(() => {
 		let phoneDurationIntervalId: NodeJS.Timeout
@@ -401,7 +405,7 @@ export default function Main() {
 			const j = new Jane()
 			j.register()
 
-			j.onMessage = (message, dialPadInputNext) => {
+			j.onMessage = (message, dialPadInputNext, endCall) => {
 				let writerId = +new Date()
 				transcriptionWriterOwnerRef.current = writerId
 
@@ -430,10 +434,21 @@ export default function Main() {
 
 				// playback speech
 				let synth = new Synthesiser(message)
-				synth.play()
+				let synthTrack = synth.play()
 				currentSynthPlayerRef.current = synth // set reference (so that it can be stopped in another event)
+				console.log("synth track", currentSynthPlayerRef.current)
+
+				// check if its end of call
+				if (endCall) {
+					// end call
+					return synthTrack.then(() => {
+						setMasterCallState(false) // drop the call
+					})
+				}
+
 
 				// start recorder
+				console.log("dialPadInputNext", dialPadInputNext)
 				if (!dialPadInputNext) {
 					// not expecting dialpad
 					return newSession(j) // new session
@@ -465,12 +480,18 @@ export default function Main() {
 			// cleanup recorder instance if present
 			console.log("cleaning up?", currentRecorderRef.current)
 			if (currentRecorderRef.current) {
+				console.log("ref exists")
 				currentRecorderRef.current.stopRecording()
 				currentRecorderRef.current.cleanup()
 				currentRecorderRef.current = undefined // unset reference
 			}
+			if (currentSynthPlayerRef.current) {
+				// stop audio playback
+				currentSynthPlayerRef.current.stop()
+			}
 
 			// clean up transcription state
+			transcriptionWriterOwnerRef.current = +new Date() // prevent old writer from updating
 			setTranscriptionText("") // set empty
 
 			// set state to be ready again
@@ -492,7 +513,7 @@ export default function Main() {
 	}, [state])
 
 	return (
-		<PhoneContext.Provider value={{state, setState, isLoading, setIsLoading, phoneCallDuration, setPhoneCallDuration, showDialPad, setShowDialPad, dialPadContent, setDialPadContent, transcriptionText}}>
+		<PhoneContext.Provider value={{state, setState, isLoading, setIsLoading, phoneCallDuration, setPhoneCallDuration, showDialPad, setShowDialPad, dialPadContent, setDialPadContent, transcriptionText, masterCallState, setMasterCallState}}>
 			<div className="grow flex flex-col items-center">
 				<img className={`transition-all ${isLoading ? `grow p-24` : `box-content p-4 basis-6 shrink-0 grow-0 min-h-0 w-1/3`}`} src={logo.src} />
 				{

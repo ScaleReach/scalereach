@@ -17,6 +17,8 @@ interface SocketConnectionDataPayload {
 }
 
 export class Recorder {
+	micReadyPromise: Promise<void>
+
 	isRecording: boolean
 	setIsRecording: Dispatch<SetStateAction<boolean>>
 
@@ -45,6 +47,12 @@ export class Recorder {
 		 * initialise websocket to transmit audio data
 		 */
 
+		// ready states
+		let micReadyPromiseResolve: () => void;
+		this.micReadyPromise = new Promise<void>(res => {
+			micReadyPromiseResolve = res
+		})
+
 		// react states
 		this.isRecording = isRecording
 		this.setIsRecording = setIsRecording
@@ -58,7 +66,9 @@ export class Recorder {
 		// initialise microphone
 		this.recorder
 		this.audioCtx
+		console.log("??>?")
 		navigator.mediaDevices.getUserMedia({ audio: true }).then((stream) => {
+			console.log("streaming")
 			const recorder = new MediaRecorder(stream)
 			this.recorder = recorder
 			this.audioCtx = new AudioContext()
@@ -85,7 +95,10 @@ export class Recorder {
 			let avgAmplitude = [] // to append average amplitude here (moving average filter)
 			const windowSize = 5 // size of moving average window
 
+			let id = 0;
+			console.log("setting up ondataavailable")
 			this.recorder.ondataavailable = async (event) => {
+				console.log("audio", this.isRecording)
 				if (!this.isRecording) {
 					// not recording, stop microphone (mediaRecorder is listening for audio but internal state says otherwise)
 					return this.stopRecording()
@@ -121,9 +134,15 @@ export class Recorder {
 						// speech detected and socket is connected -> send data to speech service
 						// console.log("sending audio")
 					}
-					this.socket.emit("audio", event.data) // send binary data as array buffer
+					console.log("sending", id)
+					this.socket.emit("audio", event.data, id) // send binary data as array buffer
+					id++
 				}
 			}
+
+			// resolving micready
+			console.log("resolving")
+			micReadyPromiseResolve()
 		}).catch(err => {
 			// mic failed
 			console.log("MIC RETRIEVAL FAILED", err)
@@ -228,7 +247,7 @@ export class Recorder {
 		if (!this.socket) {
 			throw new Error("Socket not ready")
 		}
-		console.log("preloading..")
+		console.log("preloading..", this._createSessionResolve)
 		this.socket.emit("preload")
 
 		return p // return promise chain and wait for preload-ready to come through
@@ -257,6 +276,7 @@ export class Recorder {
 		this.isRecording = true
 		this.setIsRecording(true)
 
+		console.log("listening to mic input", this.recorder)
 		if (this.recorder) {
 			this.recorder.start(500) // listen to mic input every 1000ms
 		}
