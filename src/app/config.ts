@@ -15,12 +15,12 @@ let production = {
 	COOKIE_NAME: "monster",
 
 	JANE: {
-		URL: "http://localhost:3000",
+		URL: "https://scalereach.team:6732",
 		HEADER: "x-jane-key"
 	},
 
 	ASR: {
-		URL: "wss://localhost:3002/recognition"
+		URL: "wss://scalereach.team:6733"
 	}
 }
 
