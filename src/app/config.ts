@@ -20,7 +20,7 @@ let production = {
 	},
 
 	ASR: {
-		URL: "wss://scalereach.team:6733"
+		URL: "wss://scalereach.team:6733/recognition"
 	}
 }
 
