@@ -32,6 +32,7 @@ type PhoneContext = {
 	dialPadContent?: string,
 	setDialPadContent?: Dispatch<SetStateAction<string>>,
 	transcriptionText?: string
+	transcriptionState?: boolean
 }
 
 const PhoneContext = createContext<PhoneContext>({})
@@ -252,11 +253,13 @@ function DialPad() {
 }
 
 function CallTranscription() {
-	const { transcriptionText } = useContext(PhoneContext)
+	const { transcriptionText, transcriptionState } = useContext(PhoneContext)
 
 	return (
 		<div className="flex jsutify-center items-center pb-8">
-			<p>{transcriptionText}</p>
+			<p className="transition-colors" style={{
+				color: transcriptionState ? "#fff" : "#ff0000"
+			}}>{transcriptionText}</p>
 		</div>
 	)
 }
@@ -294,6 +297,7 @@ export default function Main() {
 	const [showDialPad, setShowDialPad] = useState(false)
 
 	const [transcriptionText, setTranscriptionText] = useState("")
+	const [transcriptionState, setTranscriptionState] = useState(false) // true if final, false if interim
 	const transcriptionWriterOwnerRef = useRef(0)
 	const transcriptionWriterContentRef = useRef<string[]>([]) // store tokens of transcribed text to be displayed (typewriter effect)
 
@@ -334,11 +338,13 @@ export default function Main() {
 		let recordingSession = await recorder.createSession()
 		recordingSession.onResult = (content) => {
 			setTranscriptionText(content) // set content
+			setTranscriptionState(false) // show interim indicator
 			console.log("results", content)
 		}
 		recordingSession.onEnd = (finalContent, duration) => {
 			// recorder should already be stopped
 			setTranscriptionText(finalContent) // set final content
+			setTranscriptionState(true) // show final indicator
 			console.log("final results", finalContent, "took", duration)
 
 			// pass message to jane
@@ -416,6 +422,7 @@ export default function Main() {
 
 				transcriptionWriterContentRef.current = [] // new empty array (clear previous typed contents)
 				setTranscriptionText("")
+				setTranscriptionState(true)
 				timeIntervalId = setInterval(() => {
 					if (writerId !== transcriptionWriterOwnerRef.current || tokenIdx >= tokens.length) {
 						// no longer the same writer OR typed finish
@@ -493,6 +500,7 @@ export default function Main() {
 			// clean up transcription state
 			transcriptionWriterOwnerRef.current = +new Date() // prevent old writer from updating
 			setTranscriptionText("") // set empty
+			setTranscriptionState(true)
 
 			// set state to be ready again
 			phoneStateResetIntervalId = setTimeout(() => {
@@ -513,7 +521,7 @@ export default function Main() {
 	}, [state])
 
 	return (
-		<PhoneContext.Provider value={{state, setState, isLoading, setIsLoading, phoneCallDuration, setPhoneCallDuration, showDialPad, setShowDialPad, dialPadContent, setDialPadContent, transcriptionText, masterCallState, setMasterCallState}}>
+		<PhoneContext.Provider value={{state, setState, isLoading, setIsLoading, phoneCallDuration, setPhoneCallDuration, showDialPad, setShowDialPad, dialPadContent, setDialPadContent, transcriptionText, transcriptionState, masterCallState, setMasterCallState}}>
 			<div className="grow flex flex-col items-center">
 				<img className={`transition-all ${isLoading ? `grow p-24` : `box-content p-4 basis-6 shrink-0 grow-0 min-h-0 w-1/3`}`} src={logo.src} />
 				{
