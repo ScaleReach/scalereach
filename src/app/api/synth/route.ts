@@ -21,5 +21,5 @@ export async function POST(req: Request) {
 	console.log("headers", headers)
 	const newHeaders = new Headers(headers);
 	newHeaders.set("Connection", "keep-alive");
-	return new NextResponse(stream, { newHeaders })
+	return new NextResponse(stream, { headers: newHeaders })
 }
