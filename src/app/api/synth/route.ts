@@ -19,6 +19,7 @@ export async function POST(req: Request) {
 	const headers = await response.getHeaders()
 
 	console.log("headers", headers)
-	headers.set("Connection", "keep-alive")
-	return new NextResponse(stream, { headers })
+	const newHeaders = new Headers(headers);
+	newHeaders.set("Connection", "keep-alive");
+	return new NextResponse(stream, { newHeaders })
 }
