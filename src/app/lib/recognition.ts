@@ -76,7 +76,7 @@ export class Recorder {
 		this.recorder
 		this.audioCtx
 		console.log("??>?")
-		navigator.mediaDevices.getUserMedia({ audio: true }).then((stream) => {
+		navigator.mediaDevices.getUserMedia({ audio: { noiseSuppression: true }}).then((stream) => {
 			console.log("streaming")
 			const recorder = new MediaRecorder(stream)
 			this.recorder = recorder
