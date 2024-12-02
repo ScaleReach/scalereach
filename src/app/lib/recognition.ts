@@ -7,7 +7,7 @@ interface RecordingSession {
 	_id?: number,
 
 	onResult?: (content: string) => void
-	onEnd?: (finalContent: string, duration: number) => void // duration in seconds
+	onEnd?: (finalContent: string, duration: number) => Promise<boolean> // duration in seconds, returns promise resolves with boolean whether to preserve current instance by wiping session (so new session can come up)
 }
 
 interface SocketConnectionDataPayload {
@@ -25,6 +25,9 @@ export class Recorder {
 	isConnected: boolean
 	setIsConnected: Dispatch<SetStateAction<boolean>>
 
+	isListening: boolean
+	setIsListening: Dispatch<SetStateAction<boolean>>
+
 	recorder?: MediaRecorder
 	audioCtx?: AudioContext
 
@@ -32,14 +35,17 @@ export class Recorder {
 	session: RecordingSession
 
 	_createSessionResolve?: (value?: unknown) => void
+	onQuit?: () => void // fired when socket connection to server disconnects or finishes
 
 	constructor({
 		isRecording, setIsRecording,
 		isConnected, setIsConnected,
+		isListening, setIsListening,
 		socketURL
 	}: {
 		isRecording: boolean, setIsRecording: Dispatch<SetStateAction<boolean>>,
 		isConnected: boolean, setIsConnected: Dispatch<SetStateAction<boolean>>,
+		isListening: boolean, setIsListening: Dispatch<SetStateAction<boolean>>,
 		socketURL: string
 	}) {
 		/**
@@ -59,6 +65,9 @@ export class Recorder {
 
 		this.isConnected = isConnected
 		this.setIsConnected = setIsConnected
+
+		this.isListening = isListening
+		this.setIsListening = setIsListening
 
 		// memory
 		this.session = {}
@@ -166,6 +175,7 @@ export class Recorder {
 		}
 
 		const onDisconnect = () => {
+			this.setIsListening(false)
 			this.setIsConnected(false)
 		}
 
@@ -178,11 +188,14 @@ export class Recorder {
 
 			switch (data.type) {
 				case "end":
+					console.log("ending", this.session.onEnd)
 					if (this.session.onEnd) {
-						await this.session.onEnd(data.content, data.duration)
+						let preserveInstance = await this.session.onEnd(data.content, data.duration)
 
-						this.stopRecording()
-						this.clearSession()
+						if (preserveInstance) {
+							this.stopRecording()
+							this.clearSession()
+						}
 					}
 					break
 				case "interim":
@@ -200,18 +213,24 @@ export class Recorder {
 		}
 
 		const onTranscriptionFailure = async () => {
-			console.log("transcription failure, restarting")
-			// this.stopRecording()
-			let { onResult, onEnd } = this.session
+			// console.log("transcription failure, restarting")
+			// // this.stopRecording()
+			// let { onResult, onEnd } = this.session
 
-			this.clearSession()
-			this.createSession()
+			// this.clearSession()
+			// this.createSession()
 
-			// attach back event handlers
-			this.session.onResult = onResult
-			this.session.onEnd = onEnd
+			// // attach back event handlers
+			// this.session.onResult = onResult
+			// this.session.onEnd = onEnd
 
-			console.log("reattached")
+			// console.log("reattached")
+		}
+
+		const onQuit = async () => {
+			if (this.onQuit) {
+				this.onQuit()
+			}
 		}
 
 		// establish socket connection
@@ -226,6 +245,7 @@ export class Recorder {
 		this.socket.on("transcription", onTranscription)
 		this.socket.on("preload-ready", onPreloadReady)
 		this.socket.on("transcription-failure", onTranscriptionFailure)
+		this.socket.on("disconnect", onQuit)
 	}
 
 	createSession() {
@@ -234,8 +254,10 @@ export class Recorder {
 		 */
 		// create promise chain that only resolves when preload from speechService server has responded
 		let p = new Promise((res) => {
+			this.setIsListening(false)
 			this._createSessionResolve = res
 		}).then(() => {
+			this.setIsListening(true)
 			this.session = {
 				_id: +new Date()
 			}
@@ -293,6 +315,7 @@ export class Recorder {
 
 		this.isRecording = false
 		this.setIsRecording(false)
+		this.setIsListening(false)
 
 		if (this.recorder) {
 			this.recorder.stop()
@@ -301,8 +324,13 @@ export class Recorder {
 
 	cleanup() {
 		// cleanup socket client
+		// will not trigger .onQuit event
+		this.onQuit = undefined
 		this.socket.off()
 		this.socket.close()
+
+		// reset states
+		this.setIsListening(false)
 
 		// clean up media recorder
 		if (this.recorder) {

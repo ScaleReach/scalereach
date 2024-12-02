@@ -32,13 +32,14 @@ type PhoneContext = {
 	dialPadContent?: string,
 	setDialPadContent?: Dispatch<SetStateAction<string>>,
 	transcriptionText?: string
-	transcriptionState?: boolean
+	transcriptionState?: boolean,
+	isRecorderListening?: boolean
 }
 
 const PhoneContext = createContext<PhoneContext>({})
 
 function CallBubble() {
-	const { state, setState, isLoading } = useContext(PhoneContext)
+	const { state, setState, isLoading, isRecorderListening } = useContext(PhoneContext)
 
 	const [ showBubble, setShowBubble ] = useState(false)
 	useEffect(() => {
@@ -75,7 +76,8 @@ function CallBubble() {
 	return (
 		<div className="grow flex items-center justify-center transition-transform" style={{
 			transform: showBubble ? "scale(1)" : "scale(0)",
-			transitionDuration: "5s"
+			transitionDuration: "5s",
+			animation: isRecorderListening ? "ping 500ms cubic-bezier(.4, 0, 0.2, 1) infinite alternate" : ""
 		}}>
 			<div className="relative rounded-full w-48 h-48 box-border transition-color duration-500" style={{
 				borderWidth: state !== PhoneState.ENDED ? "2px" : "0",
@@ -308,6 +310,7 @@ export default function Main() {
 	const currentRecorderRef = useRef<Recorder|undefined>()
 	const [isRecording, setIsRecording] = useState(false)
 	const [isConnected, setIsConnected] = useState(false)
+	const [isListening, setIsListening] = useState(false)
 
 	// synthesiser
 	const currentSynthPlayerRef = useRef<Synthesiser|undefined>()
@@ -330,6 +333,7 @@ export default function Main() {
 		let recorderStates = {
 			isRecording, setIsRecording,
 			isConnected, setIsConnected,
+			isListening, setIsListening,
 			socketURL
 		}
 		let recorder = new Recorder(recorderStates)
@@ -341,7 +345,7 @@ export default function Main() {
 			setTranscriptionState(false) // show interim indicator
 			console.log("results", content)
 		}
-		recordingSession.onEnd = (finalContent, duration) => {
+		recordingSession.onEnd = async (finalContent, duration) => {
 			// recorder should already be stopped
 			setTranscriptionText(finalContent) // set final content
 			setTranscriptionState(true) // show final indicator
@@ -353,6 +357,14 @@ export default function Main() {
 			// cleanup (remove reference entirely to current recorder object)
 			recorder.cleanup() // no need to invoke .stopRecording() method since session.onEnd will do so internally
 			currentRecorderRef.current = undefined
+
+			return false // dont preserve since recorder instance will get wiped out
+		}
+		recorder.onQuit = () => {
+			// server force quit, most likely due to timeout
+			console.log("RECORDER QUITTING")
+			setMasterCallState(false)
+			setTimeout(() => setTranscriptionText("Speech service disconnected abruptly"), 500)
 		}
 
 		// start recording
@@ -398,17 +410,27 @@ export default function Main() {
 		}
 	}, [masterCallState])
 
+	// track call time
+	useEffect(() => {
+		if (phoneCallDuration >= 360) {
+			// duration over 6minutes, end the call
+			setMasterCallState(false) // end call
+			setTimeout(() => setTranscriptionText("Call duration limited to 6minutes"), 500)
+		}
+	}, [phoneCallDuration])
+
 	// main call flow
 	useEffect(() => {
 		let phoneDurationIntervalId: NodeJS.Timeout
 		let phoneStateResetIntervalId: NodeJS.Timeout
+		let j: Jane
 		if (state === PhoneState.CONNECTED) {
 			let startTime = +new Date()
 			phoneDurationIntervalId = setInterval(() => setPhoneCallDuration(Math.floor((+new Date() -startTime) /1000)), 1000)
 
 			console.log("running?")
 
-			const j = new Jane()
+			j = new Jane()
 			j.register()
 
 			j.onMessage = (message, dialPadInputNext, endCall) => {
@@ -517,11 +539,20 @@ export default function Main() {
 			if (phoneStateResetIntervalId) {
 				clearTimeout(phoneStateResetIntervalId)
 			}
+			if (j) {
+				j.cleanup()
+			}
+			if (currentRecorderRef.current) {
+				// clean up previous recorder
+				currentRecorderRef.current.stopRecording()
+				currentRecorderRef.current.cleanup()
+				currentRecorderRef.current = undefined // unset
+			}
 		}
 	}, [state])
 
 	return (
-		<PhoneContext.Provider value={{state, setState, isLoading, setIsLoading, phoneCallDuration, setPhoneCallDuration, showDialPad, setShowDialPad, dialPadContent, setDialPadContent, transcriptionText, transcriptionState, masterCallState, setMasterCallState}}>
+		<PhoneContext.Provider value={{state, setState, isLoading, setIsLoading, phoneCallDuration, setPhoneCallDuration, showDialPad, setShowDialPad, dialPadContent, setDialPadContent, transcriptionText, transcriptionState, masterCallState, setMasterCallState, isRecorderListening: isListening}}>
 			<div className="grow flex flex-col items-center">
 				<img className={`transition-all ${isLoading ? `grow p-24` : `box-content p-4 basis-6 shrink-0 grow-0 min-h-0 w-1/3`}`} src={logo.src} />
 				{

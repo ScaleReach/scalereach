@@ -60,6 +60,12 @@ body {
 	}
 }
 
+@keyframes ping {
+	100% {
+		transform: scale(1.05);
+	}
+}
+
 @layer base {
 	a {
 		@apply cursor-pointer

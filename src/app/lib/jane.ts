@@ -132,4 +132,13 @@ export class Jane {
 		console.log("dialpad input response", response.data)
 		this.addDialogue(Speaker.System, response.data.spokenResponse, response.data.type === 7 || response.data.type === 8)
 	}
+
+	async cleanup() {
+		/**
+		 * unhook function
+		 */
+		this.onMessage = undefined
+		this.isDialPadInputNext = false
+		this.bridge = undefined
+	}
 }
