@@ -91,7 +91,7 @@ export class Synthesiser {
 				console.log("SOURCE OPENED")
 				if (this.stopped || !this.mediaSource) return
 
-				this.sourceBuffer = this.mediaSource.addSourceBuffer("audio/aac")
+				this.sourceBuffer = this.mediaSource.addSourceBuffer("audio/mpeg")
 				const readableStream = await fetch(`/api/synth`, {
 					method: "POST",
 					headers: {
@@ -165,7 +165,7 @@ export class Synthesiser {
 				}
 
 				// create blob from array of chunks
-				const blob = new Blob(chunks, { type: "audio/aac" });
+				const blob = new Blob(chunks, { type: "audio/mpeg" });
 
 				this.audio.src = URL.createObjectURL(blob)
 				this.audio.play().catch(err => {

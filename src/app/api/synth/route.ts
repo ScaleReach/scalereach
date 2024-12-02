@@ -13,11 +13,12 @@ export async function POST(req: Request) {
 		return new NextResponse("Please provide text as raw string in request.body", { status: 400 })
 	}
 
-	const response = await deepgram.speak.request({ text }, { model: "aura-luna-en", encoding: "aac" })
+	const response = await deepgram.speak.request({ text }, { model: "aura-luna-en" })
 
 	const stream = await response.getStream()
 	const headers = await response.getHeaders()
 
 	console.log("headers", headers)
+	headers.set("Connection", "keep-alive")
 	return new NextResponse(stream, { headers })
 }
