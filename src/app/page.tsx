@@ -79,7 +79,7 @@ function CallBubble() {
 			transitionDuration: "5s",
 			animation: isRecorderListening ? "ping 500ms cubic-bezier(.4, 0, 0.2, 1) infinite alternate" : ""
 		}}>
-			<div className="relative rounded-full w-48 h-48 box-border transition-color duration-500" style={{
+			<div className="relative rounded-full w-32 h-32 box-border transition-color duration-500" style={{
 				borderWidth: state !== PhoneState.ENDED ? "2px" : "0",
 				borderStyle: "solid",
 				borderColor: state === PhoneState.READY ? READY_COLOR : CONNECTED_COLOR
