@@ -155,7 +155,7 @@ export class Synthesiser {
 
 				let chunks = [] // stream and accumulate audio data here
 				let finishedStreaming = false;
-				while (!finishedStreaming || !this.stopped) {
+				while (!finishedStreaming && !this.stopped) {
 					const { value, done } = await reader.read();
 					if (value) {
 						chunks.push(value);
