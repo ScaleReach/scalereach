@@ -119,7 +119,7 @@ export class Jane {
 		// unset
 		this.isDialPadInputNext = false
 
-		let response = await this.bridge.post(`/chat/supply/${this.dialPadActionId}`, {
+		let response = await this.bridge.post(`/chat/supply/${this.dialPadActionId}`, input, {
 			headers: {
 				"Content-Type": "text/plain"
 			}
