@@ -1,5 +1,5 @@
 # ScaleReach
-Interface for Jane, our first callbot.
+Interface for [Jane](https://github.com/ScaleReach/jane), our first callbot.
 
 # Startup
 ```
